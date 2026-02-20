@@ -211,6 +211,19 @@ label { font-family: 'Barlow Condensed', sans-serif; font-size: 12px; color: var
 .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* PIN MODAL */
+.pin-display { display: flex; gap: 16px; justify-content: center; margin: 20px 0; }
+.pin-dot { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--border); background: transparent; transition: all 0.15s; display: block; }
+.pin-dot.filled { background: var(--accent); border-color: var(--accent); }
+.pin-dot.shake { animation: pinShake 0.4s ease; }
+@keyframes pinShake { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-6px)} 60%{transform:translateX(6px)} 80%{transform:translateX(-3px)} }
+.pin-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 8px; }
+.pin-btn { background: var(--surface2); border: 2px solid var(--border); border-radius: 10px; padding: 16px; font-family: 'Barlow Condensed', sans-serif; font-size: 22px; font-weight: 800; cursor: pointer; transition: all 0.1s; color: var(--text); }
+.pin-btn:hover { background: var(--accent); color: white; border-color: var(--accent); }
+.pin-btn:active { transform: scale(0.92); }
+.pin-btn-clear { background: var(--surface2); color: var(--muted); }
+.pin-btn-cancel { background: var(--surface2); color: var(--danger); border-color: rgba(207,19,34,0.3); }
+
 /* ===== CAMERA SCANNER ===== */
 .scanner-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 700; display: none; flex-direction: column; align-items: center; justify-content: center; }
 .scanner-overlay.open { display: flex; }
@@ -281,6 +294,7 @@ label { font-family: 'Barlow Condensed', sans-serif; font-size: 12px; color: var
       <div class="nav-item" onclick="showTab('qr',this)">📱 Kod QR</div>
       <div class="nav-item" onclick="showTab('settings',this)">⚙️ Ustawienia</div>
       <div class="sidebar-bottom">
+        <button class="btn btn-ghost" style="width:100%;justify-content:center;color:rgba(255,255,255,0.4);border-color:rgba(255,255,255,0.15);margin-bottom:8px;" onclick="goClientFromAdmin()">🛍️ Widok klienta</button>
         <button class="btn btn-ghost" style="width:100%;justify-content:center;color:rgba(255,255,255,0.4);border-color:rgba(255,255,255,0.15);" onclick="goSwitch()">← Ekran główny</button>
       </div>
     </div>
@@ -306,7 +320,24 @@ label { font-family: 'Barlow Condensed', sans-serif; font-size: 12px; color: var
             <div class="form-row"><label>Cena (zł) *</label><input type="number" id="p-price" placeholder="2.50" step="0.10" min="0"></div>
             <div class="form-row"><label>Stan magazynowy *</label><input type="number" id="p-stock" placeholder="10" min="0"></div>
           </div>
-          <div class="form-row"><label>URL zdjęcia</label><input type="text" id="p-image" placeholder="Wypełnia się automatycznie z kodu EAN"></div>
+          <div class="form-row">
+            <label>Zdjęcie produktu</label>
+            <div style="display:flex;gap:8px;margin-bottom:8px;">
+              <button class="btn btn-ghost btn-sm" onclick="toggleImageMode('url')" id="img-mode-url" style="border-color:var(--accent);color:var(--accent);">🔗 URL</button>
+              <button class="btn btn-ghost btn-sm" onclick="toggleImageMode('upload')" id="img-mode-upload">📁 Wgraj plik</button>
+            </div>
+            <div id="img-url-wrap">
+              <input type="text" id="p-image" placeholder="https://... (wypełnia się automatycznie z EAN)">
+            </div>
+            <div id="img-upload-wrap" style="display:none;">
+              <input type="file" id="p-image-file" accept="image/*" onchange="handleImageUpload(this)" style="padding:8px;">
+              <p style="font-size:11px;color:var(--muted);margin-top:4px;">Zdjęcie zostanie zakodowane i zapisane bezpośrednio w produkcie.</p>
+            </div>
+            <div id="img-preview" style="display:none;margin-top:10px;">
+              <img id="img-preview-img" src="" style="max-width:120px;max-height:120px;object-fit:cover;border-radius:8px;border:2px solid var(--border);">
+              <button onclick="clearImage()" style="display:block;margin-top:6px;background:none;border:none;color:var(--danger);cursor:pointer;font-size:12px;">✕ Usuń zdjęcie</button>
+            </div>
+          </div>
           <input type="hidden" id="p-id">
           <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:4px;">
             <button class="btn btn-primary" onclick="saveProduct()" id="save-product-btn">💾 Zapisz produkt</button>
@@ -393,6 +424,11 @@ label { font-family: 'Barlow Condensed', sans-serif; font-size: 12px; color: var
           <div class="form-row"><label>Webhook URL</label><input type="text" id="set-discord" placeholder="https://discord.com/api/webhooks/..."></div>
           <button class="btn btn-ghost btn-sm" onclick="testDiscord()" style="margin-bottom:16px;">🧪 Testowa wiadomość</button>
         </div>
+        <div class="card">
+          <div class="card-title">🔐 PIN admina</div>
+          <p style="color:var(--muted);font-size:13px;margin-bottom:16px;">PIN używany do przejścia z widoku klienta do panelu admina (domyślnie: <strong>1234</strong>).</p>
+          <div class="form-row"><label>Nowy PIN (4 cyfry)</label><input type="text" id="set-pin" placeholder="np. 5678" maxlength="4" inputmode="numeric" style="max-width:150px;letter-spacing:0.3em;font-size:20px;font-weight:700;"></div>
+        </div>
         <button class="btn btn-primary" onclick="saveSettings()">💾 Zapisz ustawienia</button>
       </div>
 
@@ -410,6 +446,37 @@ label { font-family: 'Barlow Condensed', sans-serif; font-size: 12px; color: var
   </div>
   <div class="client-body" id="client-body">
     <p style="color:var(--muted);text-align:center;padding:60px 20px;">Ładowanie produktów...</p>
+  </div>
+  <!-- Ukryty przycisk admina — 5x tap w logo -->
+  <div id="admin-tap-zone" onclick="handleAdminTap()" style="position:fixed;bottom:0;right:0;width:60px;height:60px;z-index:50;opacity:0;cursor:default;"></div>
+</div>
+
+<!-- PIN MODAL -->
+<div class="modal-overlay" id="pin-modal">
+  <div class="modal" style="max-width:320px;">
+    <h2>🔐 Panel admina</h2>
+    <p>Podaj PIN aby przejść do panelu zarządzania.</p>
+    <div class="pin-display" id="pin-display">
+      <span class="pin-dot" id="pd0"></span>
+      <span class="pin-dot" id="pd1"></span>
+      <span class="pin-dot" id="pd2"></span>
+      <span class="pin-dot" id="pd3"></span>
+    </div>
+    <div class="pin-grid">
+      <button class="pin-btn" onclick="pinPress('1')">1</button>
+      <button class="pin-btn" onclick="pinPress('2')">2</button>
+      <button class="pin-btn" onclick="pinPress('3')">3</button>
+      <button class="pin-btn" onclick="pinPress('4')">4</button>
+      <button class="pin-btn" onclick="pinPress('5')">5</button>
+      <button class="pin-btn" onclick="pinPress('6')">6</button>
+      <button class="pin-btn" onclick="pinPress('7')">7</button>
+      <button class="pin-btn" onclick="pinPress('8')">8</button>
+      <button class="pin-btn" onclick="pinPress('9')">9</button>
+      <button class="pin-btn pin-btn-clear" onclick="pinClear()">⌫</button>
+      <button class="pin-btn" onclick="pinPress('0')">0</button>
+      <button class="pin-btn pin-btn-cancel" onclick="closePinModal()">✕</button>
+    </div>
+    <p id="pin-error" style="color:var(--danger);font-size:13px;text-align:center;min-height:20px;margin-top:8px;"></p>
   </div>
 </div>
 
@@ -511,6 +578,9 @@ function saveSettings() {
   CFG.supabaseUrl = document.getElementById('set-url').value.trim() || CFG.supabaseUrl;
   CFG.supabaseKey = document.getElementById('set-key').value.trim() || CFG.supabaseKey;
   CFG.discordWebhook = document.getElementById('set-discord').value.trim();
+  // Zapisz PIN jeśli podany
+  const newPin = document.getElementById('set-pin')?.value.trim();
+  if (newPin && newPin.length === 4 && /^\d+$/.test(newPin)) CFG.adminPin = newPin;
   localStorage.setItem(CFG_KEY, JSON.stringify(CFG));
   showToast('✅ Ustawienia zapisane!');
 }
@@ -519,6 +589,133 @@ function populateSettings() {
   document.getElementById('set-url').value = CFG.supabaseUrl || '';
   document.getElementById('set-key').value = CFG.supabaseKey || '';
   document.getElementById('set-discord').value = CFG.discordWebhook || '';
+  if (document.getElementById('set-pin')) document.getElementById('set-pin').value = '';
+}
+
+// ==============================
+// PIN MODAL
+// ==============================
+const DEFAULT_PIN = '1234';
+let pinBuffer = '';
+let adminTapCount = 0;
+let adminTapTimer = null;
+
+function handleAdminTap() {
+  adminTapCount++;
+  clearTimeout(adminTapTimer);
+  adminTapTimer = setTimeout(() => { adminTapCount = 0; }, 1500);
+  if (adminTapCount >= 5) {
+    adminTapCount = 0;
+    openPinModal();
+  }
+}
+
+function openPinModal() {
+  pinBuffer = '';
+  updatePinDots();
+  document.getElementById('pin-error').textContent = '';
+  document.getElementById('pin-modal').classList.add('open');
+}
+
+function closePinModal() {
+  pinBuffer = '';
+  document.getElementById('pin-modal').classList.remove('open');
+}
+
+function pinPress(digit) {
+  if (pinBuffer.length >= 4) return;
+  pinBuffer += digit;
+  updatePinDots();
+  if (pinBuffer.length === 4) {
+    setTimeout(checkPin, 150);
+  }
+}
+
+function pinClear() {
+  pinBuffer = pinBuffer.slice(0, -1);
+  updatePinDots();
+}
+
+function updatePinDots() {
+  for (let i = 0; i < 4; i++) {
+    const dot = document.getElementById('pd' + i);
+    dot.classList.toggle('filled', i < pinBuffer.length);
+  }
+}
+
+function checkPin() {
+  const correctPin = CFG.adminPin || DEFAULT_PIN;
+  if (pinBuffer === correctPin) {
+    closePinModal();
+    goAdmin();
+  } else {
+    document.getElementById('pin-error').textContent = '❌ Błędny PIN';
+    document.querySelectorAll('.pin-dot').forEach(d => {
+      d.classList.add('shake');
+      setTimeout(() => d.classList.remove('shake'), 400);
+    });
+    pinBuffer = '';
+    setTimeout(updatePinDots, 400);
+  }
+}
+
+// ==============================
+// IMAGE UPLOAD
+// ==============================
+function toggleImageMode(mode) {
+  const urlWrap = document.getElementById('img-url-wrap');
+  const uploadWrap = document.getElementById('img-upload-wrap');
+  const btnUrl = document.getElementById('img-mode-url');
+  const btnUpload = document.getElementById('img-mode-upload');
+
+  if (mode === 'url') {
+    urlWrap.style.display = 'block';
+    uploadWrap.style.display = 'none';
+    btnUrl.style.borderColor = 'var(--accent)'; btnUrl.style.color = 'var(--accent)';
+    btnUpload.style.borderColor = ''; btnUpload.style.color = '';
+  } else {
+    urlWrap.style.display = 'none';
+    uploadWrap.style.display = 'block';
+    btnUrl.style.borderColor = ''; btnUrl.style.color = '';
+    btnUpload.style.borderColor = 'var(--accent)'; btnUpload.style.color = 'var(--accent)';
+  }
+}
+
+function handleImageUpload(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  // Resize + convert to base64
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const MAX = 400;
+      let w = img.width, h = img.height;
+      if (w > h) { if (w > MAX) { h = h * MAX / w; w = MAX; } }
+      else { if (h > MAX) { w = w * MAX / h; h = MAX; } }
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
+      document.getElementById('p-image').value = dataUrl;
+      showImagePreview(dataUrl);
+      showToast('✅ Zdjęcie wgrane!');
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function showImagePreview(src) {
+  document.getElementById('img-preview').style.display = 'block';
+  document.getElementById('img-preview-img').src = src;
+}
+
+function clearImage() {
+  document.getElementById('p-image').value = '';
+  document.getElementById('p-image-file') && (document.getElementById('p-image-file').value = '');
+  document.getElementById('img-preview').style.display = 'none';
 }
 
 // ==============================
@@ -542,8 +739,13 @@ function goAdmin() {
 
 function goClient() {
   setViewInUrl('client');
-  // Dodaj dodatkowy wpis historii żeby zablokować cofanie do switcha
   history.pushState({ view: 'client', locked: true }, '', window.location.href);
+  showClient();
+}
+
+function goClientFromAdmin() {
+  // Admin przechodzi do klienta — bez blokady, żeby mógł wrócić
+  setViewInUrl('client');
   showClient();
 }
 
@@ -798,29 +1000,47 @@ async function lookupBarcode() {
     const data = await res.json();
 
     if (data.status !== 1) {
-      showToast('⚠️ Produkt nie znaleziony — uzupełnij ręcznie');
+      showToast('⚠️ Nie znaleziono w Open Food Facts — wpisz ręcznie lub wgraj zdjęcie');
+      btn.innerHTML = '🔍'; btn.disabled = false;
       return;
     }
 
     const p = data.product;
     const name = p.product_name_pl || p.product_name || p.abbreviated_product_name || '';
-    const image = p.image_front_url || p.image_url || '';
+    // Próbuj różnych pól zdjęcia
+    const image = p.image_front_url || p.image_front_small_url || p.image_url || p.image_small_url || '';
     const rawCat = p.categories_tags?.[0] || '';
     const cat = rawCat.replace(/^[a-z]{2}:/, '').replace(/-/g, ' ');
+    const brand = p.brands || '';
 
     if (name) document.getElementById('p-name').value = name;
-    if (image) document.getElementById('p-image').value = image;
-    if (cat) document.getElementById('p-cat').value = cat;
+    if (cat && !document.getElementById('p-cat').value) document.getElementById('p-cat').value = cat;
+
+    // Zdjęcie — pokaż podgląd i ustaw URL
+    if (image) {
+      document.getElementById('p-image').value = image;
+      showImagePreview(image);
+      toggleImageMode('url');
+    } else {
+      // Brak zdjęcia — zaproponuj wgranie
+      showToast('⚠️ Brak zdjęcia w bazie — wgraj własne 📁');
+      setTimeout(() => toggleImageMode('upload'), 800);
+    }
 
     const wrap = document.getElementById('barcode-preview-wrap');
     wrap.style.display = 'block';
     wrap.innerHTML = `
       <div class="barcode-preview">
-        ${image ? `<img src="${image}" alt="${name}" style="width:56px;height:56px;object-fit:cover;border-radius:6px;border:1px solid var(--border);">` : '<div style="width:56px;height:56px;background:var(--surface2);border-radius:6px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:22px;">📦</div>'}
-        <div><div class="bp-name">${name || 'Nieznany produkt'}</div><div class="bp-sub">${p.brands || ''}</div></div>
+        ${image
+          ? `<img src="${image}" alt="${name}" style="width:56px;height:56px;object-fit:cover;border-radius:6px;border:1px solid var(--border);" onerror="this.outerHTML='<div style=\'width:56px;height:56px;background:var(--surface2);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:22px;\'>📦</div>'">`
+          : '<div style="width:56px;height:56px;background:var(--surface2);border-radius:6px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:22px;">📷</div>'}
+        <div>
+          <div class="bp-name">${name || 'Nieznany produkt'}</div>
+          <div class="bp-sub">${brand}${!image ? ' · <span style="color:var(--danger)">Brak zdjęcia — wgraj własne</span>' : ''}</div>
+        </div>
       </div>`;
 
-    showToast('✅ Produkt znaleziony!');
+    showToast(image ? '✅ Produkt znaleziony!' : '⚠️ Znaleziono, ale brak zdjęcia');
   } catch(e) {
     showToast('❌ Błąd połączenia z Open Food Facts');
     console.error(e);
