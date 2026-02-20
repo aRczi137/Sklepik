@@ -252,12 +252,65 @@ label { font-family: 'Barlow Condensed', sans-serif; font-size: 12px; color: var
 .scanner-manual input { flex: 1; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: white; font-size: 14px; }
 .scanner-manual input::placeholder { color: rgba(255,255,255,0.3); }
 
-@media (max-width: 600px) {
+@media (max-width: 700px) {
+  /* Sidebar chowany - zastąpiony bottom nav */
   .sidebar { display: none; }
   .form-grid { grid-template-columns: 1fr; }
-  .main-content { padding: 20px 16px; }
+  .main-content { padding: 16px 14px 90px; }
   .stats-grid { grid-template-columns: 1fr 1fr; }
+
+  /* Bottom nav na mobile */
+  #mobile-nav { display: flex; }
+  #view-admin { padding-bottom: 0; }
 }
+
+@media (min-width: 701px) {
+  #mobile-nav { display: none; }
+}
+
+/* MOBILE BOTTOM NAV */
+#mobile-nav {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: var(--text);
+  border-top: 1px solid rgba(255,255,255,0.1);
+  z-index: 150;
+  padding: 0;
+  gap: 0;
+}
+.mob-nav-item {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 10px 4px 12px;
+  cursor: pointer; border: none; background: none;
+  color: rgba(255,255,255,0.4);
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.05em;
+  text-transform: uppercase; gap: 4px;
+  transition: color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.mob-nav-item .mob-icon { font-size: 20px; line-height: 1; }
+.mob-nav-item.active { color: var(--accent); }
+.mob-nav-item:hover { color: rgba(255,255,255,0.8); }
+
+/* Admin FAB — pływający przycisk w widoku klienta */
+#admin-fab {
+  position: fixed;
+  bottom: 20px; right: 16px;
+  width: 48px; height: 48px;
+  border-radius: 50%;
+  background: rgba(26,23,20,0.6);
+  border: 2px solid rgba(255,255,255,0.15);
+  color: rgba(255,255,255,0.3);
+  font-size: 18px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  z-index: 90;
+  backdrop-filter: blur(8px);
+  transition: all 0.2s;
+  -webkit-tap-highlight-color: transparent;
+}
+#admin-fab:hover, #admin-fab:active { background: rgba(26,23,20,0.9); color: white; border-color: rgba(255,255,255,0.4); }
 </style>
 </head>
 <body>
@@ -436,7 +489,27 @@ label { font-family: 'Barlow Condensed', sans-serif; font-size: 12px; color: var
   </div>
 </div>
 
-<!-- CLIENT VIEW -->
+<!-- MOBILE BOTTOM NAV (tylko na telefonie, widoczne w adminie) -->
+<div id="mobile-nav">
+  <button class="mob-nav-item active" id="mob-products" onclick="showTab('products',null);setMobActive('mob-products')">
+    <span class="mob-icon">📦</span>Produkty
+  </button>
+  <button class="mob-nav-item" id="mob-orders" onclick="showTab('orders',null);setMobActive('mob-orders')">
+    <span class="mob-icon">🧾</span>Zamówienia
+  </button>
+  <button class="mob-nav-item" id="mob-stats" onclick="showTab('stats',null);setMobActive('mob-stats')">
+    <span class="mob-icon">📊</span>Statystyki
+  </button>
+  <button class="mob-nav-item" id="mob-qr" onclick="showTab('qr',null);setMobActive('mob-qr')">
+    <span class="mob-icon">📱</span>QR
+  </button>
+  <button class="mob-nav-item" id="mob-settings" onclick="showTab('settings',null);setMobActive('mob-settings')">
+    <span class="mob-icon">⚙️</span>Ustaw.
+  </button>
+  <button class="mob-nav-item" id="mob-client" onclick="goClientFromAdmin()" style="color:var(--accent);">
+    <span class="mob-icon">🛍️</span>Klient
+  </button>
+</div>
 <div id="view-client">
   <div class="client-header">
     <div class="client-logo">🛒 SKLEPIK</div>
@@ -447,8 +520,8 @@ label { font-family: 'Barlow Condensed', sans-serif; font-size: 12px; color: var
   <div class="client-body" id="client-body">
     <p style="color:var(--muted);text-align:center;padding:60px 20px;">Ładowanie produktów...</p>
   </div>
-  <!-- Ukryty przycisk admina — 5x tap w logo -->
-  <div id="admin-tap-zone" onclick="handleAdminTap()" style="position:fixed;bottom:0;right:0;width:60px;height:60px;z-index:50;opacity:0;cursor:default;"></div>
+  <!-- Dyskretny przycisk admina — widoczny tylko dla znających -->
+  <button id="admin-fab" onclick="openPinModal()" title="Panel admina">⚙</button>
 </div>
 
 <!-- PIN MODAL -->
@@ -775,12 +848,17 @@ function showSwitch() {
   document.getElementById('view-switch').style.display = 'flex';
   document.getElementById('view-admin').style.display = 'none';
   document.getElementById('view-client').style.display = 'none';
+  document.getElementById('mobile-nav').style.display = 'none';
 }
 
 function showAdmin() {
   document.getElementById('view-switch').style.display = 'none';
   document.getElementById('view-admin').style.display = 'block';
   document.getElementById('view-client').style.display = 'none';
+  // Pokaż mobile nav tylko na małych ekranach
+  if (window.innerWidth <= 700) {
+    document.getElementById('mobile-nav').style.display = 'flex';
+  }
   renderAdminProducts();
   loadOrders();
   populateSettings();
@@ -791,7 +869,14 @@ function showClient() {
   document.getElementById('view-switch').style.display = 'none';
   document.getElementById('view-admin').style.display = 'none';
   document.getElementById('view-client').style.display = 'flex';
+  document.getElementById('mobile-nav').style.display = 'none';
   renderClientProducts();
+}
+
+function setMobActive(id) {
+  document.querySelectorAll('.mob-nav-item').forEach(el => el.classList.remove('active'));
+  const el = document.getElementById(id);
+  if (el) el.classList.add('active');
 }
 
 // ==============================
@@ -1459,6 +1544,9 @@ function showTab(tab, el) {
   document.querySelectorAll('.nav-item').forEach(e => e.classList.remove('active'));
   document.getElementById('tab-' + tab).classList.add('active');
   if (el) el.classList.add('active');
+  // Sync mobile nav
+  const mobMap = { products:'mob-products', orders:'mob-orders', stats:'mob-stats', qr:'mob-qr', settings:'mob-settings' };
+  if (mobMap[tab]) setMobActive(mobMap[tab]);
   if (tab === 'stats') { loadOrders(); }
   if (tab === 'qr') generateQRCodes();
   if (tab === 'orders') loadOrders();
