@@ -1484,48 +1484,33 @@ function updateCartBadge() {
 function openCart() {
   document.getElementById('cart-overlay').classList.add('open');
   document.getElementById('cart-drawer').classList.add('open');
+  
+  // Sprawdzamy czy mamy imię i podmieniamy działanie przycisku w koszyku
+  const savedName = localStorage.getItem('sklepik_buyer_name');
+  const btn = document.querySelector('.cart-footer-dr .btn-success');
+  
+  if (btn) {
+    if (savedName) {
+      btn.innerHTML = `✅ Kupuję jako <strong>${savedName}</strong>`;
+      btn.setAttribute('onclick', 'checkoutFast()');
+    } else {
+      btn.innerHTML = `✅ Dalej — podaj imię`;
+      btn.setAttribute('onclick', 'openBuyerModal()');
+    }
+  }
+  
   renderCart();
 }
 
-function closeCart() {
-  document.getElementById('cart-overlay').classList.remove('open');
-  document.getElementById('cart-drawer').classList.remove('open');
-}
-
-function renderCart() {
-  const list = document.getElementById('cart-items-list');
-  const keys = Object.keys(cart).filter(id => cart[id] > 0);
-  if (!keys.length) {
-    list.innerHTML = `<div class="cart-empty"><div class="e-icon">🛒</div><p>Koszyk jest pusty</p></div>`;
-    document.getElementById('cart-total').textContent = '0,00 zł';
-    return;
+// Nowa funkcja do szybkiego zakupu z pominięciem okienka
+function checkoutFast() {
+  const savedName = localStorage.getItem('sklepik_buyer_name');
+  if (savedName) {
+    document.getElementById('buyer-name').value = savedName;
+    checkout();
+  } else {
+    openBuyerModal();
   }
-  let total = 0;
-  list.innerHTML = keys.map(id => {
-    const p = products.find(x => x.id === id); if (!p) return '';
-    const sub = p.price * cart[id]; total += sub;
-    return `
-      <div class="cart-item">
-        ${p.image_url ? `<img src="${p.image_url}" class="cart-item-img" onerror="this.src=''">` : `<div class="cart-item-img" style="display:flex;align-items:center;justify-content:center;font-size:18px;">📦</div>`}
-        <div class="cart-item-info">
-          <div class="cart-item-name">${p.name}</div>
-          <div class="cart-item-unit">${fmtPrice(p.price)} / szt.</div>
-        </div>
-        <div class="cart-item-controls">
-          <button class="qty-btn" onclick="changeQty('${id}',-1)">−</button>
-          <span class="cart-item-qty">${cart[id]}</span>
-          <button class="qty-btn" onclick="changeQty('${id}',1)">+</button>
-        </div>
-        <div class="cart-item-price">${fmtPrice(sub)}</div>
-      </div>`;
-  }).join('');
-  document.getElementById('cart-total').textContent = fmtPrice(total);
-}
-
-function changeQty(id, delta) {
-  cart[id] = (cart[id] || 0) + delta;
-  if (cart[id] <= 0) delete cart[id];
-  updateCartBadge(); renderCart();
 }
 
 function openBuyerModal() {
@@ -1533,17 +1518,24 @@ function openBuyerModal() {
   document.getElementById('buyer-modal').classList.add('open');
   setTimeout(() => document.getElementById('buyer-name').focus(), 100);
 }
-function closeBuyerModal() { document.getElementById('buyer-modal').classList.remove('open'); }
 
 async function checkout() {
   const buyer = document.getElementById('buyer-name').value.trim();
   if (!buyer) { showToast('❌ Podaj imię!'); document.getElementById('buyer-name').focus(); return; }
 
+  // Zapis do pamięci przy pierwszym udanym zakupie
+  localStorage.setItem('sklepik_buyer_name', buyer);
+
   const keys = Object.keys(cart).filter(id => cart[id] > 0);
   if (!keys.length) return;
 
+  // Blokowanie obu przycisków, aby uniknąć podwójnego kliknięcia
   const btn = document.getElementById('confirm-buy-btn');
-  btn.innerHTML = '<span class="spinner"></span> Wysyłam...'; btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Wysyłam...'; 
+  btn.disabled = true;
+  
+  const cartBtn = document.querySelector('.cart-footer-dr .btn-success');
+  if (cartBtn) { cartBtn.innerHTML = '<span class="spinner"></span> Wysyłam...'; cartBtn.disabled = true; }
 
   try {
     const items = keys.map(id => {
@@ -1567,7 +1559,6 @@ async function checkout() {
     if (CFG.discordWebhook) sendDiscord(order);
 
     cart = {}; updateCartBadge();
-    document.getElementById('buyer-name').value = '';
     closeBuyerModal(); closeCart();
     renderClientProducts();
 
@@ -1578,6 +1569,7 @@ async function checkout() {
     showToast('❌ Błąd: ' + e.message); console.error(e);
   } finally {
     btn.innerHTML = '✅ Kupuję!'; btn.disabled = false;
+    if (cartBtn) { cartBtn.innerHTML = `✅ Kupuję jako <strong>${buyer}</strong>`; cartBtn.disabled = false; }
   }
 }
 
