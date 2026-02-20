@@ -4,13 +4,115 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sklepik</title>
-    <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.20.0/umd/index.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f3f4f6;
+            margin: 0;
+            padding: 20px;
+        }
+        header {
+            background-color: #4CAF50;
+            color: white;
+            padding: 15px;
+            text-align: center;
+        }
+        .container {
+            margin: 20px 0;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-around;
+        }
+        .product {
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 15px;
+            width: 30%;
+            margin: 10px;
+            background: white;
+        }
+        .cart {
+            position: fixed;
+            right: 20px;
+            top: 20px;
+            padding: 15px;
+            background: #fff;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .admin-panel {
+            margin-top: 50px;
+        }
+        .admin-panel input, .admin-panel button {
+            margin: 5px;
+        }
+    </style>
 </head>
 <body>
-    <h1>Welcome to Sklepik</h1>
-    <p>This is a sample web application.</p>
+    <header>
+        <h1>Welcome to Sklepik</h1>
+        <div id="cart" class="cart">Cart: 0 items</div>
+    </header>
+    <div class="container" id="product-list">
+        <!-- Products will be dynamically generated here -->
+    </div>
+    <div class="admin-panel">
+        <h2>Admin Panel</h2>
+        <input type="text" id="product-name" placeholder="Product Name">
+        <input type="number" id="product-price" placeholder="Price">
+        <button onclick="addProduct()">Add Product</button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/zxing-canvas/0.18.6/zxing-canvas.min.js"></script>
     <script>
-        // Your barcode scanning code here.
+        let products = [];
+        let cartCount = 0;
+
+        function addProduct() {
+            const name = document.getElementById('product-name').value;
+            const price = document.getElementById('product-price').value;
+            if (name && price) {
+                products.push({ name, price });
+                document.getElementById('product-name').value = '';
+                document.getElementById('product-price').value = '';
+                renderProducts();
+            }
+        }
+
+        function renderProducts() {
+            const productList = document.getElementById('product-list');
+            productList.innerHTML = '';
+            products.forEach((product, index) => {
+                productList.innerHTML += `<div class='product'>\n                    <h3>${product.name}</h3>\n                    <p>Price: $${product.price}</p>\n                    <button onclick='addToCart(${index})'>Add to Cart</button>\n                </div>`;
+            });
+        }
+
+        function addToCart(index) {
+            cartCount++;
+            document.getElementById('cart').innerText = 'Cart: ' + cartCount + ' items';
+        }
+
+        // Barcode Scanning Functionality
+        const codeReader = new ZXing.BrowserMultiFormatReader();
+        codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
+            if (result) {
+                alert(`Barcode detected: ${result.text}`);
+            } else if (err) {
+                console.error(err);
+            }
+        });
+
+        function sendWebhook(message) {
+            // Discord Webhook integration
+            fetch('YOUR_DISCORD_WEBHOOK_URL', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ content: message })
+            });
+        }
     </script>
+    <video id="video" width="300" height="200" style="border: 1px solid black;"></video>
 </body>
 </html>
