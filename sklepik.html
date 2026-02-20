@@ -2162,7 +2162,11 @@
       CFG.discordWebhook = document.getElementById('set-discord').value.trim();
       // Zapisz PIN jeśli podany
       const newPin = document.getElementById('set-pin')?.value.trim();
-      if (newPin && newPin.length === 4 && /^\d+$/.test(newPin)) CFG.adminPin = newPin;
+      if (newPin && newPin.length === 4 && /^\d+$/.test(newPin)) {
+        CFG.adminPin = newPin;
+        // Zapisz PIN do bazy danych
+        savePinToDb(newPin);
+      }
       localStorage.setItem(CFG_KEY, JSON.stringify(CFG));
       showToast('✅ Ustawienia zapisane!');
     }
@@ -2178,6 +2182,31 @@
     // PIN MODAL
     // ==============================
     const DEFAULT_PIN = '1234';
+
+    async function savePinToDb(pin) {
+      try {
+        // Upsert — jeśli wiersz istnieje, podmień; jeśli nie, utwórz
+        await sbFetch('settings', {
+          method: 'POST',
+          body: JSON.stringify({ key: 'admin_pin', value: pin }),
+          prefer: 'resolution=merge-duplicates,return=minimal'
+        });
+      } catch (e) {
+        console.warn('Nie udało się zapisać PIN do bazy:', e.message);
+      }
+    }
+
+    async function loadAdminPin() {
+      try {
+        const data = await sbFetch('settings?key=eq.admin_pin&select=value');
+        if (data && data.length > 0 && data[0].value) {
+          CFG.adminPin = data[0].value;
+        }
+      } catch (e) {
+        // Fallback — zostaje PIN z localStorage lub domyślny
+        console.warn('Nie udało się załadować PIN z bazy:', e.message);
+      }
+    }
     let pinBuffer = '';
     let adminTapCount = 0;
     let adminTapTimer = null;
@@ -3274,7 +3303,7 @@
       loadConfig();
 
       const ok = await loadProducts();
-      await loadCategories();
+      await Promise.all([loadCategories(), loadAdminPin()]);
 
       document.getElementById('loading-screen').style.display = 'none';
 
