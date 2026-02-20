@@ -311,6 +311,23 @@ label { font-family: 'Barlow Condensed', sans-serif; font-size: 12px; color: var
   -webkit-tap-highlight-color: transparent;
 }
 #admin-fab:hover, #admin-fab:active { background: rgba(26,23,20,0.9); color: white; border-color: rgba(255,255,255,0.4); }
+
+/* CATEGORIES */
+.cat-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px;
+  border: 2px solid var(--border);
+  border-radius: 8px; margin-bottom: 8px;
+  background: var(--surface);
+  transition: border-color 0.15s;
+}
+.cat-item:hover { border-color: var(--accent); }
+.cat-emoji { font-size: 24px; width: 36px; text-align: center; flex-shrink: 0; }
+.cat-name { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 18px; flex: 1; }
+.cat-count { font-size: 12px; color: var(--muted); margin-right: 8px; }
+.cat-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.cat-drag { cursor: grab; color: var(--muted); font-size: 18px; padding: 0 4px; user-select: none; }
+.cat-drag:active { cursor: grabbing; }
 </style>
 </head>
 <body>
@@ -345,6 +362,7 @@ label { font-family: 'Barlow Condensed', sans-serif; font-size: 12px; color: var
       <div class="nav-item" onclick="showTab('orders',this)">🧾 Zamówienia</div>
       <div class="nav-item" onclick="showTab('stats',this)">📊 Statystyki</div>
       <div class="nav-item" onclick="showTab('qr',this)">📱 Kod QR</div>
+      <div class="nav-item" onclick="showTab('categories',this)">🏷️ Kategorie</div>
       <div class="nav-item" onclick="showTab('settings',this)">⚙️ Ustawienia</div>
       <div class="sidebar-bottom">
         <button class="btn btn-ghost" style="width:100%;justify-content:center;color:rgba(255,255,255,0.4);border-color:rgba(255,255,255,0.15);margin-bottom:8px;" onclick="goClientFromAdmin()">🛍️ Widok klienta</button>
@@ -369,7 +387,15 @@ label { font-family: 'Barlow Condensed', sans-serif; font-size: 12px; color: var
           <div id="barcode-preview-wrap" style="display:none; margin-bottom:16px;"></div>
           <div class="form-grid">
             <div class="form-row"><label>Nazwa produktu *</label><input type="text" id="p-name" placeholder="np. Woda mineralna"></div>
-            <div class="form-row"><label>Kategoria</label><input type="text" id="p-cat" placeholder="np. Napoje"></div>
+            <div class="form-row">
+              <label>Kategoria</label>
+              <div style="display:flex;gap:8px;">
+                <select id="p-cat" style="flex:1;">
+                  <option value="">— wybierz —</option>
+                </select>
+                <button class="btn btn-ghost btn-sm" onclick="showTab('categories',null);setMobActive(null)" title="Zarządzaj kategoriami" style="flex-shrink:0;">🏷️</button>
+              </div>
+            </div>
             <div class="form-row"><label>Cena (zł) *</label><input type="number" id="p-price" placeholder="2.50" step="0.10" min="0"></div>
             <div class="form-row"><label>Stan magazynowy *</label><input type="number" id="p-stock" placeholder="10" min="0"></div>
           </div>
@@ -464,6 +490,31 @@ label { font-family: 'Barlow Condensed', sans-serif; font-size: 12px; color: var
         </div>
       </div>
 
+      <!-- CATEGORIES TAB -->
+      <div class="tab-content" id="tab-categories">
+        <div class="page-header"><h1>Kategorie</h1><p>Zarządzaj kategoriami produktów</p></div>
+        <div class="card">
+          <div class="card-title">➕ Dodaj kategorię</div>
+          <div style="display:flex;gap:10px;align-items:flex-end;">
+            <div style="flex:1;">
+              <label>Emoji</label>
+              <input type="text" id="cat-emoji" placeholder="🥤" style="max-width:80px;font-size:22px;text-align:center;">
+            </div>
+            <div style="flex:3;">
+              <label>Nazwa kategorii *</label>
+              <input type="text" id="cat-name" placeholder="np. Napoje">
+            </div>
+            <input type="hidden" id="cat-id">
+            <button class="btn btn-primary" onclick="saveCategory()" id="save-cat-btn" style="flex-shrink:0;">💾 Zapisz</button>
+            <button class="btn btn-ghost" onclick="clearCategoryForm()" id="cancel-cat" style="display:none;flex-shrink:0;">✕</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">Lista kategorii</div>
+          <div id="categories-list"></div>
+        </div>
+      </div>
+
       <!-- SETTINGS TAB -->
       <div class="tab-content" id="tab-settings">
         <div class="page-header"><h1>Ustawienia</h1><p>Konfiguracja połączeń</p></div>
@@ -497,11 +548,11 @@ label { font-family: 'Barlow Condensed', sans-serif; font-size: 12px; color: var
   <button class="mob-nav-item" id="mob-orders" onclick="showTab('orders',null);setMobActive('mob-orders')">
     <span class="mob-icon">🧾</span>Zamówienia
   </button>
+  <button class="mob-nav-item" id="mob-categories" onclick="showTab('categories',null);setMobActive('mob-categories')">
+    <span class="mob-icon">🏷️</span>Kategorie
+  </button>
   <button class="mob-nav-item" id="mob-stats" onclick="showTab('stats',null);setMobActive('mob-stats')">
     <span class="mob-icon">📊</span>Statystyki
-  </button>
-  <button class="mob-nav-item" id="mob-qr" onclick="showTab('qr',null);setMobActive('mob-qr')">
-    <span class="mob-icon">📱</span>QR
   </button>
   <button class="mob-nav-item" id="mob-settings" onclick="showTab('settings',null);setMobActive('mob-settings')">
     <span class="mob-icon">⚙️</span>Ustaw.
@@ -638,6 +689,7 @@ const DEFAULTS = {
 let CFG = {};
 let products = [];
 let orders = [];
+let categories = [];
 let cart = {};
 
 function loadConfig() {
@@ -855,12 +907,12 @@ function showAdmin() {
   document.getElementById('view-switch').style.display = 'none';
   document.getElementById('view-admin').style.display = 'block';
   document.getElementById('view-client').style.display = 'none';
-  // Pokaż mobile nav tylko na małych ekranach
   if (window.innerWidth <= 700) {
     document.getElementById('mobile-nav').style.display = 'flex';
   }
   renderAdminProducts();
   loadOrders();
+  loadCategories();
   populateSettings();
   generateQRCodes();
 }
@@ -905,6 +957,128 @@ async function loadProducts() {
   } catch(e) {
     console.error('loadProducts:', e);
     return false;
+  }
+}
+
+async function loadCategories() {
+  try {
+    const data = await sbFetch('categories?select=*&order=sort_order.asc,created_at.asc');
+    categories = Array.isArray(data) ? data : [];
+  } catch(e) {
+    console.error('loadCategories:', e);
+    // Fallback — zbierz kategorie z produktów
+    const cats = [...new Set(products.map(p => p.category).filter(Boolean))];
+    categories = cats.map((c, i) => ({ id: 'local_' + i, name: c, emoji: '', sort_order: i }));
+  }
+  refreshCategorySelects();
+  renderCategoriesList();
+}
+
+function refreshCategorySelects() {
+  // Odśwież select w formularzu produktu
+  const sel = document.getElementById('p-cat');
+  if (!sel) return;
+  const current = sel.value;
+  sel.innerHTML = '<option value="">— wybierz kategorię —</option>' +
+    categories.map(c => `<option value="${c.name}">${c.emoji ? c.emoji + ' ' : ''}${c.name}</option>`).join('');
+  if (current) sel.value = current;
+}
+
+function renderCategoriesList() {
+  const list = document.getElementById('categories-list');
+  if (!list) return;
+  if (!categories.length) {
+    list.innerHTML = '<p style="color:var(--muted);text-align:center;padding:24px;">Brak kategorii — dodaj pierwszą!</p>';
+    return;
+  }
+  list.innerHTML = categories.map(c => {
+    const cnt = products.filter(p => p.category === c.name).length;
+    return `
+      <div class="cat-item" id="catrow-${c.id}">
+        <span class="cat-emoji">${c.emoji || '📁'}</span>
+        <span class="cat-name">${c.name}</span>
+        <span class="cat-count">${cnt} prod.</span>
+        <div class="cat-actions">
+          <button class="btn btn-ghost btn-sm" onclick="editCategory('${c.id}')">✏️</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteCategory('${c.id}','${c.name}')"
+            ${cnt > 0 ? 'title="Uwaga: produkty tej kategorii stracą przypisanie"' : ''}>🗑️</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+async function saveCategory() {
+  const name = document.getElementById('cat-name').value.trim();
+  const emoji = document.getElementById('cat-emoji').value.trim();
+  const cid = document.getElementById('cat-id').value;
+
+  if (!name) { showToast('❌ Podaj nazwę kategorii!'); return; }
+
+  const btn = document.getElementById('save-cat-btn');
+  btn.innerHTML = '<span class="spinner"></span>'; btn.disabled = true;
+
+  try {
+    if (cid) {
+      // Edycja
+      const oldCat = categories.find(c => c.id === cid);
+      await sbFetch(`categories?id=eq.${cid}`, { method: 'PATCH', body: JSON.stringify({ name, emoji }), prefer: 'return=minimal' });
+      // Zaktualizuj produkty jeśli nazwa się zmieniła
+      if (oldCat && oldCat.name !== name) {
+        await sbFetch(`products?category=eq.${encodeURIComponent(oldCat.name)}`, { method: 'PATCH', body: JSON.stringify({ category: name }), prefer: 'return=minimal' });
+        products.forEach(p => { if (p.category === oldCat.name) p.category = name; });
+      }
+      const cat = categories.find(c => c.id === cid);
+      if (cat) { cat.name = name; cat.emoji = emoji; }
+    } else {
+      // Nowa
+      const payload = { id: 'cat' + Date.now(), name, emoji, sort_order: categories.length, created_at: new Date().toISOString() };
+      await sbFetch('categories', { method: 'POST', body: JSON.stringify(payload) });
+      categories.push(payload);
+    }
+    clearCategoryForm();
+    refreshCategorySelects();
+    renderCategoriesList();
+    showToast('✅ Kategoria zapisana!');
+  } catch(e) {
+    showToast('❌ Błąd: ' + e.message);
+    console.error(e);
+  } finally {
+    btn.innerHTML = '💾 Zapisz'; btn.disabled = false;
+  }
+}
+
+function editCategory(id) {
+  const c = categories.find(x => x.id === id);
+  if (!c) return;
+  document.getElementById('cat-name').value = c.name;
+  document.getElementById('cat-emoji').value = c.emoji || '';
+  document.getElementById('cat-id').value = c.id;
+  document.getElementById('cancel-cat').style.display = '';
+  document.getElementById('cat-name').focus();
+}
+
+function clearCategoryForm() {
+  document.getElementById('cat-name').value = '';
+  document.getElementById('cat-emoji').value = '';
+  document.getElementById('cat-id').value = '';
+  document.getElementById('cancel-cat').style.display = 'none';
+}
+
+async function deleteCategory(id, name) {
+  const cnt = products.filter(p => p.category === name).length;
+  const msg = cnt > 0
+    ? `Usunąć kategorię "${name}"?\n\n⚠️ ${cnt} produktów straci przypisanie do kategorii.`
+    : `Usunąć kategorię "${name}"?`;
+  if (!confirm(msg)) return;
+
+  try {
+    await sbFetch(`categories?id=eq.${id}`, { method: 'DELETE', prefer: 'return=minimal' });
+    categories = categories.filter(c => c.id !== id);
+    refreshCategorySelects();
+    renderCategoriesList();
+    showToast('🗑️ Kategoria usunięta');
+  } catch(e) {
+    showToast('❌ Błąd usuwania: ' + e.message);
   }
 }
 
@@ -1231,11 +1405,14 @@ function editProduct(id) {
 }
 
 function clearProductForm() {
-  ['p-name','p-price','p-stock','p-cat','p-image','p-barcode','p-id'].forEach(id => {
+  ['p-name','p-price','p-stock','p-image','p-barcode','p-id'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
   });
+  const catSel = document.getElementById('p-cat');
+  if (catSel) catSel.value = '';
   document.getElementById('cancel-edit').style.display = 'none';
   document.getElementById('barcode-preview-wrap').style.display = 'none';
+  clearImage();
 }
 
 async function deleteProduct(id) {
@@ -1544,12 +1721,12 @@ function showTab(tab, el) {
   document.querySelectorAll('.nav-item').forEach(e => e.classList.remove('active'));
   document.getElementById('tab-' + tab).classList.add('active');
   if (el) el.classList.add('active');
-  // Sync mobile nav
-  const mobMap = { products:'mob-products', orders:'mob-orders', stats:'mob-stats', qr:'mob-qr', settings:'mob-settings' };
+  const mobMap = { products:'mob-products', orders:'mob-orders', stats:'mob-stats', qr:'mob-qr', settings:'mob-settings', categories:'mob-categories' };
   if (mobMap[tab]) setMobActive(mobMap[tab]);
-  if (tab === 'stats') { loadOrders(); }
+  if (tab === 'stats') loadOrders();
   if (tab === 'qr') generateQRCodes();
   if (tab === 'orders') loadOrders();
+  if (tab === 'categories') { loadCategories(); }
 }
 
 // ==============================
@@ -1579,6 +1756,8 @@ async function startApp() {
   loadConfig();
 
   const ok = await loadProducts();
+  await loadCategories();
+
   document.getElementById('loading-screen').style.display = 'none';
 
   const dot = document.getElementById('status-dot');
@@ -1586,10 +1765,8 @@ async function startApp() {
   dot.className = 'status-dot ' + (ok ? 'online' : 'offline');
   stxt.textContent = ok ? `Połączono · ${products.length} produktów` : 'Błąd połączenia z bazą';
 
-  // Routing — sprawdź URL
   const view = getViewFromUrl();
   if (view === 'client') {
-    // Ustaw blokadę: dodaj dodatkowy wpis historii
     history.replaceState({ view: 'client' }, '', window.location.href);
     history.pushState({ view: 'client', locked: true }, '', window.location.href);
     showClient();
