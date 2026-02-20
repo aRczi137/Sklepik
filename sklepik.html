@@ -471,7 +471,9 @@ label { font-family: 'Barlow Condensed', sans-serif; font-size: 12px; color: var
     <div class="scanner-status-bar" id="scanner-status">
       <p>Nakieruj kamerę na kod kreskowy</p>
     </div>
-    <select class="scanner-cam-select" id="cam-select" onchange="switchCamera(this.value)" style="display:none;"></select>
+    <div style="padding: 0 20px 8px; display:flex; justify-content:center;">
+      <button class="btn btn-ghost btn-sm" onclick="switchCamera()" style="color:rgba(255,255,255,0.5);border-color:rgba(255,255,255,0.15);font-size:11px;">🔄 Przełącz kamerę</button>
+    </div>
     <div class="scanner-manual">
       <input type="text" id="manual-barcode" placeholder="Wpisz kod ręcznie..." inputmode="numeric">
       <button class="btn btn-primary btn-sm" onclick="useManualBarcode()">OK</button>
@@ -634,95 +636,144 @@ async function loadOrders() {
 // ==============================
 // BARCODE / CAMERA SCANNER
 // ==============================
-let codeReader = null;
+// ==============================
+// CAMERA SCANNER
+// Używa natywnego BarcodeDetector API (Chrome/Android)
+// z fallbackiem na ZXing
+// ==============================
+let scannerStream = null;
 let scannerActive = false;
+let scannerAnimFrame = null;
+let zxingReader = null;
 
 async function openScanner() {
   document.getElementById('scanner-overlay').classList.add('open');
-  document.getElementById('scanner-status').innerHTML = '<p>Uruchamianie kamery...</p>';
-  document.getElementById('scanner-status').className = 'scanner-status-bar';
+  setStatus('Uruchamianie kamery...', '');
 
   try {
-    // Sprawdź dostępność ZXing
-    if (typeof ZXing === 'undefined') {
-      throw new Error('Biblioteka skanera nie załadowana');
+    // Poproś o kamerę — od razu tylna (environment)
+    scannerStream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: 'environment' },
+        width: { ideal: 1280 },
+        height: { ideal: 720 }
+      }
+    });
+
+    const video = document.getElementById('scanner-video');
+    video.srcObject = scannerStream;
+    await video.play();
+
+    scannerActive = true;
+    setStatus('Nakieruj kamerę na kod kreskowy', '');
+
+    // Wybierz metodę skanowania
+    if (typeof BarcodeDetector !== 'undefined') {
+      // Natywne API — najlepsze na Androidzie Chrome
+      startNativeScan(video);
+    } else if (typeof ZXing !== 'undefined') {
+      // Fallback ZXing
+      startZxingScan(video);
+    } else {
+      setStatus('Brak obsługi skanera — wpisz kod ręcznie', 'err');
     }
-
-    codeReader = new ZXing.BrowserMultiFormatReader();
-
-    // Pobierz listę kamer
-    const devices = await ZXing.BrowserCodeReader.listVideoInputDevices();
-
-    if (!devices || devices.length === 0) {
-      throw new Error('Brak dostępnych kamer');
-    }
-
-    // Preferuj tylną kamerę
-    const backCam = devices.find(d =>
-      d.label.toLowerCase().includes('back') ||
-      d.label.toLowerCase().includes('rear') ||
-      d.label.toLowerCase().includes('environment') ||
-      d.label.toLowerCase().includes('tył')
-    ) || devices[devices.length - 1];
-
-    // Wypełnij select jeśli jest >1 kamera
-    const sel = document.getElementById('cam-select');
-    if (devices.length > 1) {
-      sel.style.display = 'block';
-      sel.innerHTML = devices.map(d =>
-        `<option value="${d.deviceId}" ${d.deviceId === backCam.deviceId ? 'selected' : ''}>${d.label || 'Kamera ' + (devices.indexOf(d)+1)}</option>`
-      ).join('');
-    }
-
-    startScan(backCam.deviceId);
 
   } catch(e) {
-    console.error('Scanner error:', e);
-    document.getElementById('scanner-status').innerHTML = `<p>${e.message || 'Błąd kamery — użyj wpisywania ręcznego'}</p>`;
-    document.getElementById('scanner-status').className = 'scanner-status-bar err';
-  }
-}
-
-function startScan(deviceId) {
-  if (!codeReader) return;
-  scannerActive = true;
-  document.getElementById('scanner-status').innerHTML = '<p>Nakieruj kamerę na kod kreskowy</p>';
-  document.getElementById('scanner-status').className = 'scanner-status-bar';
-
-  codeReader.decodeFromVideoDevice(deviceId, 'scanner-video', (result, err) => {
-    if (!scannerActive) return;
-    if (result) {
-      const code = result.getText();
-      // Wibracja jeśli dostępna
-      if (navigator.vibrate) navigator.vibrate([80, 30, 80]);
-
-      document.getElementById('scanner-status').innerHTML = `<p>✅ Znaleziono: ${code}</p>`;
-      document.getElementById('scanner-status').className = 'scanner-status-bar found';
-
-      setTimeout(() => {
-        closeScanner();
-        document.getElementById('p-barcode').value = code;
-        lookupBarcode();
-      }, 600);
+    console.error('Scanner:', e);
+    if (e.name === 'NotAllowedError') {
+      setStatus('Brak uprawnień do kamery — wpisz kod ręcznie', 'err');
+    } else {
+      setStatus('Błąd kamery — wpisz kod ręcznie', 'err');
     }
-  });
+  }
 }
 
-function switchCamera(deviceId) {
-  if (codeReader) {
-    codeReader.reset();
-    startScan(deviceId);
+// Natywny BarcodeDetector (Chrome Android 83+)
+async function startNativeScan(video) {
+  let detector;
+  try {
+    detector = new BarcodeDetector({ formats: ['ean_13','ean_8','upc_a','upc_e','code_128','code_39','itf','qr_code'] });
+  } catch {
+    detector = new BarcodeDetector();
   }
+
+  const scan = async () => {
+    if (!scannerActive) return;
+    try {
+      const codes = await detector.detect(video);
+      if (codes && codes.length > 0) {
+        onBarcodeFound(codes[0].rawValue);
+        return;
+      }
+    } catch {}
+    scannerAnimFrame = requestAnimationFrame(scan);
+  };
+  scannerAnimFrame = requestAnimationFrame(scan);
+}
+
+// ZXing fallback
+function startZxingScan(video) {
+  try {
+    zxingReader = new ZXing.BrowserMultiFormatReader();
+    // Użyj stream bezpośrednio na video
+    const scan = () => {
+      if (!scannerActive) return;
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth || 640;
+        canvas.height = video.videoHeight || 480;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const luminance = new ZXing.RGBLuminanceSource(imgData.data, canvas.width, canvas.height);
+        const bitmap = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(luminance));
+        const result = zxingReader.decode(bitmap);
+        if (result) { onBarcodeFound(result.getText()); return; }
+      } catch {}
+      scannerAnimFrame = requestAnimationFrame(scan);
+    };
+    scannerAnimFrame = requestAnimationFrame(scan);
+  } catch(e) {
+    // Jeśli ZXing też nie działa, pokaż tylko ręczne wpisywanie
+    setStatus('Wpisz kod kreskowy ręcznie poniżej', 'err');
+  }
+}
+
+function onBarcodeFound(code) {
+  if (!scannerActive) return;
+  scannerActive = false;
+  if (navigator.vibrate) navigator.vibrate([80, 40, 80]);
+  setStatus('✅ Znaleziono: ' + code, 'found');
+  setTimeout(() => {
+    closeScanner();
+    document.getElementById('p-barcode').value = code;
+    lookupBarcode();
+  }, 700);
+}
+
+function setStatus(msg, cls) {
+  const el = document.getElementById('scanner-status');
+  el.innerHTML = `<p>${msg}</p>`;
+  el.className = 'scanner-status-bar' + (cls ? ' ' + cls : '');
+}
+
+function switchCamera() {
+  // Przełącz facing mode
+  closeScanner();
+  setTimeout(openScanner, 300);
 }
 
 function closeScanner() {
   scannerActive = false;
-  if (codeReader) {
-    try { codeReader.reset(); } catch {}
-    codeReader = null;
+  if (scannerAnimFrame) { cancelAnimationFrame(scannerAnimFrame); scannerAnimFrame = null; }
+  if (scannerStream) {
+    scannerStream.getTracks().forEach(t => t.stop());
+    scannerStream = null;
   }
+  const video = document.getElementById('scanner-video');
+  video.srcObject = null;
+  if (zxingReader) { try { zxingReader.reset(); } catch {} zxingReader = null; }
   document.getElementById('scanner-overlay').classList.remove('open');
-  document.getElementById('cam-select').style.display = 'none';
   document.getElementById('manual-barcode').value = '';
 }
 
