@@ -2996,7 +2996,7 @@
       const section = document.getElementById('cart-buyer-section');
       const btn = document.getElementById('cart-checkout-btn');
       if (savedName) {
-        section.innerHTML = `<div class="buyer-badge">👤 <span class="buyer-badge-name">${savedName}</span><button class="buyer-badge-change" onclick="openBuyerModal()">Nie ty?</button></div>`;
+        section.innerHTML = `<div class="buyer-badge">👤 <span class="buyer-badge-name">${savedName}</span></div>`;
         btn.innerHTML = '✅ Kupuję!';
       } else {
         section.innerHTML = '';
