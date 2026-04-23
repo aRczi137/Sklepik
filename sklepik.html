@@ -3435,13 +3435,16 @@
       if (!CFG.discordWebhook) return;
       const items = order.items.map(i => `• **${i.name}** × ${i.qty} = ${fmtPrice(i.qty * i.price)}`).join('\n');
       const devLabel = order.device_id ? shortDeviceId(order.device_id) : 'brak';
+      const dev = devices.find(d => d.device_id === order.device_id);
+      const displayName = (dev && dev.admin_name) ? dev.admin_name : order.buyer;
+      const buyerInfo = (dev && dev.admin_name) ? `${dev.admin_name} (wpisał: ${order.buyer})` : order.buyer;
       const payload = {
         username: '🛒 Sklepik',
         embeds: [{
-          title: `🛍️ Nowe zamówienie — ${order.buyer}`,
+          title: `🛍️ Nowe zamówienie — ${displayName}`,
           color: 0xd4380d,
           fields: [
-            { name: 'Kupujący', value: order.buyer, inline: true },
+            { name: 'Kupujący', value: buyerInfo, inline: true },
             { name: 'Kwota', value: fmtPrice(order.total), inline: true },
             { name: 'Device ID', value: devLabel, inline: true },
             { name: 'Produkty', value: items }
