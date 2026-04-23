@@ -3043,11 +3043,11 @@
         body.innerHTML = '<p style="color:var(--muted);text-align:center;padding:60px 20px;">Aktualnie brak dostępnych produktów.</p>';
         return;
       }
-      const cats = [...new Set(availableProducts.map(p => p.category || 'Inne'))];
+      const cats = [...new Set(availableProducts.map(p => p.category || 'Inne'))].sort((a, b) => { if (a === 'Inne') return 1; if (b === 'Inne') return -1; return a.localeCompare(b, 'pl'); });
       body.innerHTML = cats.map(cat => `
     <div class="client-section-title">${cat}</div>
     <div class="products-grid">
-      ${availableProducts.filter(p => (p.category || 'Inne') === cat).map(p => `
+      ${availableProducts.filter(p => (p.category || 'Inne') === cat).sort((a, b) => a.name.localeCompare(b.name, 'pl')).map(p => `
         <div class="product-card">
           ${p.image_url
           ? `<img src="${p.image_url}" class="product-img" alt="${p.name}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="product-img-ph" style="display:none;">📦</div>`
