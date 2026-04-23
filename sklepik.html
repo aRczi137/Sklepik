@@ -1828,7 +1828,6 @@
                   <tr>
                     <th>Zdjęcie</th>
                     <th>Nazwa</th>
-                    <th>Kategoria</th>
                     <th>Cena</th>
                     <th>Stan</th>
                     <th>Akcje</th>
@@ -2903,19 +2902,24 @@
       );
 
       if (!filtered.length) {
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:32px;">
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:32px;">
       ${products.length === 0 ? 'Brak produktów — dodaj pierwszy!' : 'Brak wyników'}
     </td></tr>`;
         return;
       }
 
-      tbody.innerHTML = filtered.map(p => `
-    <tr>
+      const grouped = {};
+      filtered.forEach(p => { const cat = p.category || 'Inne'; if (!grouped[cat]) grouped[cat] = []; grouped[cat].push(p); });
+      Object.values(grouped).forEach(arr => arr.sort((a, b) => a.name.localeCompare(b.name, 'pl')));
+      const catNames = Object.keys(grouped).sort((a, b) => { if (a === 'Inne') return 1; if (b === 'Inne') return -1; return a.localeCompare(b, 'pl'); });
+
+      const catEmoji = (name) => { const c = categories.find(x => x.name === name); return c && c.emoji ? c.emoji + ' ' : ''; };
+
+      const productRow = (p) => `<tr>
       <td>${p.image_url
           ? `<img src="${p.image_url}" class="product-thumb" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="product-thumb-ph" style="display:none;">📦</div>`
           : `<div class="product-thumb-ph">📦</div>`}</td>
       <td><strong>${p.name}</strong>${p.barcode ? `<br><small style="color:var(--muted);font-size:11px;">${p.barcode}</small>` : ''}</td>
-      <td style="color:var(--muted);">${p.category || '–'}</td>
       <td style="font-family:'Barlow Condensed';font-weight:900;font-size:17px;color:var(--accent);">${fmtPrice(p.price)}</td>
       <td><span class="badge ${p.stock > 5 ? 'badge-green' : p.stock > 0 ? 'badge-orange' : 'badge-red'}">${p.stock} szt.</span></td>
       <td>
@@ -2926,8 +2930,14 @@
           <button class="btn btn-ghost btn-sm" onclick="adjustStock('${p.id}',1)" title="Zwiększ stan">+</button>
         </div>
       </td>
-    </tr>
-  `).join('');
+    </tr>`;
+
+      tbody.innerHTML = catNames.map(cat =>
+        `<tr><td colspan="5" style="padding:14px 14px 8px;border-bottom:2px solid var(--accent);background:rgba(212,56,13,0.04);">
+          <span style="font-family:'Barlow Condensed';font-weight:800;font-size:16px;text-transform:uppercase;letter-spacing:0.06em;color:var(--accent);">${catEmoji(cat)}${cat}</span>
+          <span style="font-size:11px;color:var(--muted);margin-left:8px;">${grouped[cat].length} prod.</span>
+        </td></tr>` + grouped[cat].map(productRow).join('')
+      ).join('');
     }
 
     async function saveProduct() {
