@@ -1734,6 +1734,7 @@
         <div class="nav-item active" onclick="showTab('products',this)">📦 Produkty</div>
         <div class="nav-item" onclick="showTab('orders',this)">🧾 Zamówienia</div>
         <div class="nav-item" onclick="showTab('stats',this)">📊 Statystyki</div>
+        <div class="nav-item" onclick="showTab('clients',this)">👥 Klienci</div>
         <div class="nav-item" onclick="showTab('qr',this)">📱 Kod QR</div>
         <div class="nav-item" onclick="showTab('categories',this)">🏷️ Kategorie</div>
         <div class="nav-item" onclick="showTab('settings',this)">⚙️ Ustawienia</div>
@@ -1943,6 +1944,30 @@
           </div>
         </div>
 
+        <!-- CLIENTS TAB -->
+        <div class="tab-content" id="tab-clients">
+          <div class="page-header">
+            <h1>Klienci</h1>
+            <p>Rozpoznawanie klientów po urządzeniu (Device ID)</p>
+          </div>
+          <div class="card" style="background:rgba(9,109,217,0.05);border-color:rgba(9,109,217,0.2);margin-bottom:20px;">
+            <p style="font-size:13px;color:var(--muted);line-height:1.7;">
+              💡 <strong>Jak to działa:</strong> Każde urządzenie klienta otrzymuje unikalny identyfikator (Device ID). Nawet jeśli klient zmieni imię, jego Device ID pozostaje ten sam — dzięki czemu wiesz, kto naprawdę złożył zamówienie.<br>
+              ✏️ Możesz ustawić własną <strong>nazwę/nick</strong> dla każdego urządzenia, np. "Kacper z 3B".
+            </p>
+          </div>
+          <div class="card">
+            <div class="card-title">📱 Znane urządzenia</div>
+            <div class="filter-row">
+              <input type="text" id="search-clients" placeholder="🔍 Szukaj po nazwie lub ID..." oninput="renderDevices()">
+              <button class="btn btn-ghost btn-sm" onclick="loadDevices()">🔄 Odśwież</button>
+            </div>
+            <div id="devices-list">
+              <p style="color:var(--muted);padding:20px;">Ładowanie...</p>
+            </div>
+          </div>
+        </div>
+
         <!-- SETTINGS TAB -->
         <div class="tab-content" id="tab-settings">
           <div class="page-header">
@@ -1991,6 +2016,9 @@
     </button>
     <button class="mob-nav-item" id="mob-stats" onclick="showTab('stats',null);setMobActive('mob-stats')">
       <span class="mob-icon">📊</span>Statystyki
+    </button>
+    <button class="mob-nav-item" id="mob-clients" onclick="showTab('clients',null);setMobActive('mob-clients')">
+      <span class="mob-icon">👥</span>Klienci
     </button>
     <button class="mob-nav-item" id="mob-settings" onclick="showTab('settings',null);setMobActive('mob-settings')">
       <span class="mob-icon">⚙️</span>Ustaw.
@@ -2148,6 +2176,74 @@
     let orders = [];
     let categories = [];
     let cart = {};
+    let devices = [];
+
+    // ==============================
+    // DEVICE FINGERPRINT
+    // ==============================
+    const DEVICE_ID_KEY = 'sklepik_device_id';
+    const IDB_NAME = 'sklepik_idb';
+    const IDB_STORE = 'meta';
+
+    function openIDB() {
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.open(IDB_NAME, 1);
+        req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    async function saveDeviceIdToIDB(id) {
+      try {
+        const db = await openIDB();
+        const tx = db.transaction(IDB_STORE, 'readwrite');
+        tx.objectStore(IDB_STORE).put(id, 'device_id');
+        await new Promise((r, j) => { tx.oncomplete = r; tx.onerror = j; });
+      } catch (e) { console.warn('IDB save error:', e); }
+    }
+
+    async function loadDeviceIdFromIDB() {
+      try {
+        const db = await openIDB();
+        const tx = db.transaction(IDB_STORE, 'readonly');
+        const req = tx.objectStore(IDB_STORE).get('device_id');
+        return new Promise((resolve) => {
+          req.onsuccess = () => resolve(req.result || null);
+          req.onerror = () => resolve(null);
+        });
+      } catch { return null; }
+    }
+
+    async function getDeviceId() {
+      // 1. Try localStorage
+      let id = localStorage.getItem(DEVICE_ID_KEY);
+      if (id) return id;
+      // 2. Try IndexedDB (backup)
+      id = await loadDeviceIdFromIDB();
+      if (id) {
+        localStorage.setItem(DEVICE_ID_KEY, id);
+        return id;
+      }
+      // 3. Generate new
+      id = crypto.randomUUID();
+      localStorage.setItem(DEVICE_ID_KEY, id);
+      await saveDeviceIdToIDB(id);
+      return id;
+    }
+
+    function shortDeviceId(id) {
+      if (!id) return '—';
+      return id.substring(0, 8).toUpperCase();
+    }
+
+    function deviceIdColor(id) {
+      if (!id) return '#888';
+      let hash = 0;
+      for (let i = 0; i < id.length; i++) hash = id.charCodeAt(i) + ((hash << 5) - hash);
+      const h = Math.abs(hash) % 360;
+      return `hsl(${h}, 55%, 45%)`;
+    }
 
     function loadConfig() {
       try {
@@ -2399,6 +2495,7 @@
       renderAdminProducts();
       loadOrders();
       loadCategories();
+      loadDevices();
       populateSettings();
       generateQRCodes();
     }
@@ -3083,9 +3180,30 @@
           return { productId: id, name: p.name, qty: cart[id], price: p.price, image_url: p.image_url || '' };
         });
         const total = items.reduce((s, i) => s + i.qty * i.price, 0);
-        const order = { id: 'ord' + Date.now(), buyer, items, total, created_at: new Date().toISOString() };
+        const deviceId = await getDeviceId();
+        const order = { id: 'ord' + Date.now(), buyer, device_id: deviceId, items, total, created_at: new Date().toISOString() };
 
         await sbFetch('orders', { method: 'POST', body: JSON.stringify(order) });
+
+        // Upsert device record
+        try {
+          const existing = await sbFetch(`devices?device_id=eq.${deviceId}&select=*`);
+          if (existing && existing.length > 0) {
+            const dev = existing[0];
+            const namesUsed = Array.isArray(dev.names_used) ? dev.names_used : [];
+            if (!namesUsed.includes(buyer)) namesUsed.push(buyer);
+            await sbFetch(`devices?device_id=eq.${deviceId}`, {
+              method: 'PATCH',
+              body: JSON.stringify({ names_used: namesUsed, last_seen_at: new Date().toISOString(), order_count: (dev.order_count || 0) + 1, total_spent: parseFloat((dev.total_spent || 0)) + total }),
+              prefer: 'return=minimal'
+            });
+          } else {
+            await sbFetch('devices', {
+              method: 'POST',
+              body: JSON.stringify({ device_id: deviceId, admin_name: '', names_used: [buyer], first_seen_at: new Date().toISOString(), last_seen_at: new Date().toISOString(), order_count: 1, total_spent: total })
+            });
+          }
+        } catch (e) { console.warn('Device upsert error:', e); }
 
         for (const item of items) {
           const p = products.find(x => x.id === item.productId);
@@ -3140,16 +3258,21 @@
     function renderOrders() {
       const search = (document.getElementById('search-orders')?.value || '').toLowerCase();
       const list = document.getElementById('orders-list'); if (!list) return;
-      const filtered = orders.filter(o => o.buyer.toLowerCase().includes(search));
+      const filtered = orders.filter(o => o.buyer.toLowerCase().includes(search) || (o.device_id || '').toLowerCase().includes(search));
       if (!filtered.length) {
         list.innerHTML = '<p style="color:var(--muted);text-align:center;padding:40px;">Brak zamówień</p>'; return;
       }
       list.innerHTML = filtered.map(o => {
         const d = new Date(o.created_at);
         const items = Array.isArray(o.items) ? o.items : (JSON.parse(o.items || '[]'));
+        const dev = devices.find(dv => dv.device_id === o.device_id);
+        const adminName = dev && dev.admin_name ? ` · ${dev.admin_name}` : '';
+        const deviceBadge = o.device_id
+          ? `<span style="display:inline-block;background:${deviceIdColor(o.device_id)};color:white;font-size:10px;padding:2px 7px;border-radius:4px;font-family:'Barlow Condensed';font-weight:700;letter-spacing:0.05em;margin-left:8px;vertical-align:middle;" title="Device ID: ${o.device_id}">${shortDeviceId(o.device_id)}${adminName}</span>`
+          : '';
         return `<div class="order-item">
       <div class="order-header">
-        <div><div class="order-buyer">👤 ${o.buyer}</div><div class="order-meta">${d.toLocaleDateString('pl-PL')} ${d.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })} · ${items.length} poz.</div></div>
+        <div><div class="order-buyer">👤 ${o.buyer}${deviceBadge}</div><div class="order-meta">${d.toLocaleDateString('pl-PL')} ${d.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })} · ${items.length} poz.</div></div>
         <div class="order-total">${fmtPrice(o.total)}</div>
       </div>
       <div class="order-items-list">${items.map(i => `${i.name} × ${i.qty} (${fmtPrice(i.qty * i.price)})`).join(' &nbsp;·&nbsp; ')}</div>
@@ -3188,6 +3311,80 @@
         : `<table class="products-table"><thead><tr><th>Klient</th><th>Zamówienia</th><th>Wydano</th></tr></thead><tbody>
       ${topB.map(([n, d]) => `<tr><td><strong>${n}</strong></td><td>${d.n}</td><td style="color:var(--accent);font-family:'Barlow Condensed';font-weight:900;">${fmtPrice(d.s)}</td></tr>`).join('')}
     </tbody></table>`;
+    }
+
+    // ==============================
+    // DEVICES (Klienci)
+    // ==============================
+    async function loadDevices() {
+      try {
+        const data = await sbFetch('devices?select=*&order=last_seen_at.desc');
+        devices = Array.isArray(data) ? data : [];
+      } catch (e) {
+        console.error('loadDevices:', e);
+        devices = [];
+      }
+      renderDevices();
+    }
+
+    function renderDevices() {
+      const list = document.getElementById('devices-list');
+      if (!list) return;
+      const search = (document.getElementById('search-clients')?.value || '').toLowerCase();
+      const filtered = devices.filter(d =>
+        (d.admin_name || '').toLowerCase().includes(search) ||
+        (d.device_id || '').toLowerCase().includes(search) ||
+        (d.names_used || []).some(n => n.toLowerCase().includes(search))
+      );
+      if (!filtered.length) {
+        list.innerHTML = '<p style="color:var(--muted);text-align:center;padding:40px;">Brak zarejestrowanych urządzeń</p>';
+        return;
+      }
+      list.innerHTML = `<table class="products-table"><thead><tr>
+        <th>Device ID</th><th>Nazwa admina</th><th>Używane imiona</th><th>Zamówienia</th><th>Wydano</th><th>Ostatnio</th><th>Akcje</th>
+      </tr></thead><tbody>
+      ${filtered.map(d => {
+        const lastSeen = d.last_seen_at ? new Date(d.last_seen_at).toLocaleDateString('pl-PL') : '—';
+        const names = Array.isArray(d.names_used) ? d.names_used.join(', ') : '—';
+        return `<tr>
+          <td><span style="display:inline-block;background:${deviceIdColor(d.device_id)};color:white;font-size:11px;padding:3px 8px;border-radius:4px;font-family:'Barlow Condensed';font-weight:700;letter-spacing:0.05em;" title="${d.device_id}">${shortDeviceId(d.device_id)}</span></td>
+          <td><input type="text" value="${d.admin_name || ''}" placeholder="np. Kacper z 3B" style="max-width:160px;padding:6px 10px;font-size:13px;" onchange="saveDeviceAdminName('${d.device_id}', this.value)"></td>
+          <td style="font-size:13px;color:var(--muted);max-width:180px;overflow:hidden;text-overflow:ellipsis;">${names}</td>
+          <td style="font-weight:700;">${d.order_count || 0}</td>
+          <td style="color:var(--accent);font-family:'Barlow Condensed';font-weight:900;">${fmtPrice(d.total_spent || 0)}</td>
+          <td style="font-size:12px;color:var(--muted);">${lastSeen}</td>
+          <td><button class="btn btn-ghost btn-sm" onclick="filterOrdersByDevice('${d.device_id}')" title="Pokaż zamówienia">🧾</button></td>
+        </tr>`;
+      }).join('')}
+      </tbody></table>`;
+    }
+
+    async function saveDeviceAdminName(deviceId, name) {
+      try {
+        await sbFetch(`devices?device_id=eq.${deviceId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ admin_name: name.trim() }),
+          prefer: 'return=minimal'
+        });
+        const dev = devices.find(d => d.device_id === deviceId);
+        if (dev) dev.admin_name = name.trim();
+        showToast('✅ Nazwa zapisana!');
+      } catch (e) {
+        showToast('❌ Błąd zapisu: ' + e.message);
+      }
+    }
+
+    function filterOrdersByDevice(deviceId) {
+      showTab('orders', null);
+      setMobActive('mob-orders');
+      // Set sidebar active
+      document.querySelectorAll('.nav-item').forEach(e => e.classList.remove('active'));
+      document.querySelectorAll('.nav-item').forEach(e => { if (e.textContent.includes('Zamówienia')) e.classList.add('active'); });
+      const searchInput = document.getElementById('search-orders');
+      if (searchInput) {
+        searchInput.value = deviceId.substring(0, 8);
+        renderOrders();
+      }
     }
 
     // ==============================
@@ -3237,6 +3434,7 @@
     async function sendDiscord(order) {
       if (!CFG.discordWebhook) return;
       const items = order.items.map(i => `• **${i.name}** × ${i.qty} = ${fmtPrice(i.qty * i.price)}`).join('\n');
+      const devLabel = order.device_id ? shortDeviceId(order.device_id) : 'brak';
       const payload = {
         username: '🛒 Sklepik',
         embeds: [{
@@ -3245,6 +3443,7 @@
           fields: [
             { name: 'Kupujący', value: order.buyer, inline: true },
             { name: 'Kwota', value: fmtPrice(order.total), inline: true },
+            { name: 'Device ID', value: devLabel, inline: true },
             { name: 'Produkty', value: items }
           ],
           footer: { text: `ID: ${order.id}` },
@@ -3272,12 +3471,13 @@
       document.querySelectorAll('.nav-item').forEach(e => e.classList.remove('active'));
       document.getElementById('tab-' + tab).classList.add('active');
       if (el) el.classList.add('active');
-      const mobMap = { products: 'mob-products', orders: 'mob-orders', stats: 'mob-stats', qr: 'mob-qr', settings: 'mob-settings', categories: 'mob-categories' };
+      const mobMap = { products: 'mob-products', orders: 'mob-orders', stats: 'mob-stats', qr: 'mob-qr', settings: 'mob-settings', categories: 'mob-categories', clients: 'mob-clients' };
       if (mobMap[tab]) setMobActive(mobMap[tab]);
       if (tab === 'stats') loadOrders();
       if (tab === 'qr') generateQRCodes();
-      if (tab === 'orders') loadOrders();
+      if (tab === 'orders') { loadDevices().then(() => loadOrders()); }
       if (tab === 'categories') { loadCategories(); }
+      if (tab === 'clients') { loadDevices(); }
     }
 
     // ==============================
