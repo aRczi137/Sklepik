@@ -2931,12 +2931,17 @@
         body.innerHTML = '<p style="color:var(--muted);text-align:center;padding:60px 20px;">Brak produktów w sklepiku.</p>';
         return;
       }
-      const cats = [...new Set(products.map(p => p.category || 'Inne'))];
+      const availableProducts = products.filter(p => p.stock > 0);
+      if (!availableProducts.length) {
+        body.innerHTML = '<p style="color:var(--muted);text-align:center;padding:60px 20px;">Aktualnie brak dostępnych produktów.</p>';
+        return;
+      }
+      const cats = [...new Set(availableProducts.map(p => p.category || 'Inne'))];
       body.innerHTML = cats.map(cat => `
     <div class="client-section-title">${cat}</div>
     <div class="products-grid">
-      ${products.filter(p => (p.category || 'Inne') === cat).map(p => `
-        <div class="product-card ${p.stock === 0 ? 'out' : ''}">
+      ${availableProducts.filter(p => (p.category || 'Inne') === cat).map(p => `
+        <div class="product-card">
           ${p.image_url
           ? `<img src="${p.image_url}" class="product-img" alt="${p.name}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="product-img-ph" style="display:none;">📦</div>`
           : `<div class="product-img-ph">📦</div>`}
@@ -2945,9 +2950,9 @@
             <div class="product-card-cat">${p.category || ''}</div>
             <div class="product-card-bottom">
               <div class="product-card-price">${fmtPrice(p.price)}</div>
-              <div class="product-card-stock">${p.stock > 0 ? p.stock + ' szt.' : '❌ Brak'}</div>
+              <div class="product-card-stock">${p.stock} szt.</div>
             </div>
-            ${p.stock > 0 ? `<button class="add-to-cart-btn" onclick="addToCart('${p.id}')">+ Do koszyka</button>` : ''}
+            <button class="add-to-cart-btn" onclick="addToCart('${p.id}')">+ Do koszyka</button>
           </div>
         </div>
       `).join('')}
@@ -3098,7 +3103,7 @@
         renderClientProducts();
 
         document.getElementById('success-sub').innerHTML =
-          `<strong>${buyer}</strong>, Twoje zamówienie na <strong>${fmtPrice(total)}</strong> zostało zarejestrowane.<br>Płatność przy odbiorze u admina.`;
+          `A teraz przelewaj kaske lamusie`;
         document.getElementById('success-overlay').classList.add('show');
       } catch (e) {
         showToast('❌ Błąd: ' + e.message); console.error(e);
